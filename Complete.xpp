@@ -1,0 +1,116 @@
+// Step 1: Creating the contract class and specify list data type for the variable
+[DataContractAttribute,
+ SysOperationContractProcessingAttribute(classStr(SalesOrderUIBuilder))
+]
+class SalesOrderContractClass
+{
+    List customerAcc;  
+
+    [DataMemberAttribute('Account'), AifCollectionTypeAttribute('Account', Types::String),SysOperationLabelAttribute('Account'),SysOperationDisplayOrderAttribute('1')]
+
+    public List parmCustomerAccount(List _customerAcc = customerAcc)
+    {
+        customerAcc = _customerAcc;
+        return customerAcc;
+    }
+
+}
+
+// Step 2: Creating the UIBuilder
+class SalesOrderUIBuilder extends SysOperationAutomaticUIBuilder
+{
+    DialogField dialogItemId;
+    SalesOrderContractClass contract;
+
+    private void ItemIdLookup(FormStringControl _control)
+    {
+        // Create a query to retrieve data
+        Query query = new Query();
+        container conprodid;
+        QueryBuildDataSource qbds;
+        QueryBuildrange qbr;
+        
+        // Add a data source to the query
+        qbds = query.addDataSource(tableNum(CustTable));
+        qbds.addSelectionField(fieldNum(CustTable, AccountNum));
+        
+        // Perform a lookup using SysLookupMultiSelectGrid
+        SysLookupMultiSelectGrid::lookup(query, _control, conprodid);
+    }
+
+    public void build()
+    {
+        int i;
+        // Get the contract object
+        contract = this.dataContractObject() as SalesOrderContractClass;
+        
+        // Add a dialog field for customer account
+        dialogItemId = this.addDialogField(methodStr(SalesOrderContractClass, parmCustomerAccount), contract);
+    }
+
+    public void postBuild()
+    {
+        super();
+        // Get the contract object
+        contract = this.dataContractObject() as SalesOrderContractClass;
+        
+        // Get the dialog field for customer account
+        dialogItemId = this.bindInfo().getDialogField(contract, methodStr(SalesOrderContractClass, parmCustomerAccount));
+        
+        // Register an override method for lookup
+        dialogItemId.registerOverrideMethod(methodStr(FormStringControl, lookup), methodStr(SalesOrderUIBuilder, ItemIdLookup), this);
+        
+        if (dialogItemId)
+        {
+            // Set up the lookup button
+            dialogItemId.lookupButton(2);
+        }
+    }
+
+    public void postRun()
+    {
+        //super();
+    }
+}
+
+// Step 3: The Data Provider class
+[SRSReportParameterAttribute(classstr(SalesOrderContractClass))]
+class SalesOrderDPClass extends SRSReportDataProviderPreprocess
+{
+    SalesOrderTmp saleOrder;
+    
+    [SRSReportDataSetAttribute(tableStr(SalesOrderTmp))]
+    public SalesOrderTmp getSalesOrderTmp()
+    {
+        // Retrieve data for the report
+        select * from saleOrder;
+        return saleOrder;
+    }
+
+    public void processReport()
+    {
+        CustTrans customerTable;        
+        SalesOrderContractClass contract = this.parmDataContract() as SalesOrderContractClass;        
+        ListIterator ItemIdListIterator;
+        List custList = contract.parmCustomerAccount();
+        
+        // Create a list iterator for customer accounts
+        ItemIdListIterator = new ListIterator(custList);
+    
+        while (ItemIdListIterator.more())
+        {
+            // Retrieve data from the customer table based on account number
+            select * from customerTable
+            where (customerTable.AccountNum == ItemIdListIterator.value())
+                 
+            if (customerTable)
+            {
+                saleOrder.clear();
+                // Rest of the code to process the data and insert it into the report dataset
+                saleOrder.insert();
+            }
+        
+            ItemIdListIterator.next();
+        }
+    }
+}
